@@ -81,6 +81,8 @@ export interface DownloadTaskView {
   queuePosition: number
   /** 大小写折叠后的名称，自然序比较用（建行时预计算，比较器内不分配）。 */
   nameFold: string
+  /** 分类匹配用扩展名：文件名优先，无扩展时回退 URL 末段（建行时预计算，分类过滤/计数热路径不重复解码）。 */
+  categoryExtension: string | null
   /** 远程任务目标设备 id（本地任务为空）。 */
   toDevice: string
   /** 远程任务的云端状态（云端命令是否可用的门控依据）；本地任务为 null。 */
@@ -120,6 +122,33 @@ export function extensionOf(name: string): string | null {
   if (dot < 0) return null
   const ext = name.slice(dot + 1).toLowerCase()
   return ext === '' || ext.includes('/') ? null : ext
+}
+
+/** 百分号解码；非法 `%` 序列保留原样（与 agent `category_dir.rs` 的 `percent_decode` 同容错）。 */
+function percentDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
+/**
+ * URL 路径末段的扩展名（解码后须含非空扩展）。分类兜底证据：浏览器捕获的任务文件名常为空，
+ * 保存目录匹配（agent `category_dir.rs`）已用 URL 末段参与判定，这里对齐同一口径——
+ * 文件名拿到真实扩展名前也能命中分类。查询串不参与。
+ */
+export function urlExtensionOf(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return null
+  }
+  const segments = parsed.pathname.split('/')
+  const last = segments[segments.length - 1] ?? ''
+  if (last === '') return null
+  return extensionOf(percentDecode(last))
 }
 
 export function stateOfStatus(status: number): TaskState {
@@ -214,6 +243,7 @@ export function buildLocalView(
     queueOrder: task.queueOrder,
     queuePosition,
     nameFold: task.fileName.toLowerCase(),
+    categoryExtension: extensionOf(task.fileName) ?? urlExtensionOf(task.url),
     toDevice: '',
     remoteStatus: null,
     dto: task,
@@ -257,6 +287,7 @@ export function buildRemoteView(task: RemoteTaskDto): DownloadTaskView {
     queueOrder: 0,
     queuePosition: 0,
     nameFold: task.fileName.toLowerCase(),
+    categoryExtension: extensionOf(task.fileName) ?? urlExtensionOf(task.url),
     toDevice: task.toDevice,
     remoteStatus: task.status,
     dto: undefined,

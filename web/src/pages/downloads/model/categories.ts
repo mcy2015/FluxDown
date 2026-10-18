@@ -1,9 +1,11 @@
 // 分类匹配索引（移植 crates/downloads/src/model/categories.rs）：
 // 由偏好 `custom_categories` 构建，按扩展名 / 正则把任务归类。
+// 本地增强：扩展名匹配用 view 预计算的 `categoryExtension`——文件名无扩展时回退
+// URL 路径末段（与 agent `category_dir.rs` 的保存目录判定同口径），浏览器捕获的
+// 空名任务在拿到真实文件名前也能命中分类；正则仍匹配显示名，不吃 URL 兜底。
 
 import type { CustomCategoryDto } from '../../../lib/rpc'
 import { compileEngineRegex } from '../../rss/filter'
-import { extensionOf } from './task'
 import type { DownloadTaskView } from './task'
 
 type Matcher =
@@ -116,7 +118,7 @@ export class CategoryIndex {
       case 'other':
         return false
       case 'extensions': {
-        const ext = extensionOf(view.name)
+        const ext = view.categoryExtension
         return ext !== null && matcher.set.has(ext)
       }
       case 'regex':
