@@ -84,6 +84,17 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tini xz-utils \
     && rm -rf /var/lib/apt/lists/*
+# Node.js 22：yt-dlp 解析 YouTube 的 n-sig 挑战需要系统 JS 运行时（Node ≥22 或 Deno ≥2.3）。
+# debian bookworm 的 apt 只有 nodejs 18，故按 TARGETARCH 解压官方二进制进 /usr/local（版本按需 bump）。
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+      amd64) node_arch=x64 ;; \
+      arm64) node_arch=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-${node_arch}.tar.xz" \
+       | tar -xJ -C /usr/local --strip-components=1 \
+    && node --version
 WORKDIR /app
 # fluxdownd 必须与 fluxdown-agent 同目录（agent 按同级路径拉起 daemon）
 COPY --from=server /usr/local/bin/fluxdown-agent /usr/local/bin/fluxdownd /app/
